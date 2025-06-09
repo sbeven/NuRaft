@@ -31,3 +31,11 @@ target_link_libraries(quick_start
                       ${LIBRARY_NAME}
                       ${LIBRARIES})
 
+add_executable(nuraft-logging
+               nuraft-logging/nuraft-logging.cxx
+               logger.cc
+               in_memory_log_store.cxx)
+
+target_link_libraries(nuraft-logging
+                      ${LIBRARY_NAME}
+                      ${LIBRARIES})
