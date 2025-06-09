@@ -15,7 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 **************************************************************************/
 
-#include "logging_state_machine.hxx"
+#include "nl_state_machine.hxx"
 #include "in_memory_state_mgr.hxx"
 #include "logger_wrapper.hxx"
 
