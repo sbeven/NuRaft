@@ -16,7 +16,7 @@ limitations under the License.
 **************************************************************************/
 
 #include "nl_state_machine.hxx"
-#include "in_memory_state_mgr.hxx"
+#include "nl_state_mgr.hxx"
 #include "logger_wrapper.hxx"
 
 #include "nuraft.hxx"

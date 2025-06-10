@@ -29,13 +29,13 @@ namespace nuraft {
 
 class raft_server;
 
-class inmem_log_store : public log_store {
+class nl_log_store : public log_store {
 public:
-    inmem_log_store();
+    nl_log_store();
 
-    ~inmem_log_store();
+    ~nl_log_store();
 
-    __nocopy__(inmem_log_store);
+    __nocopy__(nl_log_store);
 
 public:
     ulong next_slot() const;

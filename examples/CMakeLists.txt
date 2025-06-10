@@ -31,11 +31,11 @@ target_link_libraries(quick_start
                       ${LIBRARY_NAME}
                       ${LIBRARIES})
 
-add_executable(nuraft-logging
-               nuraft-logging/nuraft-logging.cxx
+add_executable(nuraft_logging
+               nuraft_logging/nuraft_logging.cxx
                logger.cc
-               nuraft-logging/nl_log_store.cxx)
+               nuraft_logging/nl_log_store.cxx)
 
-target_link_libraries(nuraft-logging
+target_link_libraries(nuraft_logging
                       ${LIBRARY_NAME}
                       ${LIBRARIES})

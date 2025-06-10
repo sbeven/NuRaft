@@ -20,23 +20,25 @@ limitations under the License.
 #include "nuraft.hxx"
 
 #include <cassert>
+#include <fstream>
 
 namespace nuraft {
 
-inmem_log_store::inmem_log_store()
+nl_log_store::nl_log_store()
     : start_idx_(1)
     , raft_server_bwd_pointer_(nullptr)
 {
+    std::fstream fs("log.txt");
     // Dummy entry for index 0.
     ptr<buffer> buf = buffer::alloc(sz_ulong);
     logs_[0] = cs_new<log_entry>(0, buf);
 }
 
-inmem_log_store::~inmem_log_store() {
+nl_log_store::~nl_log_store() {
 
 }
 
-ptr<log_entry> inmem_log_store::make_clone(const ptr<log_entry>& entry) {
+ptr<log_entry> nl_log_store::make_clone(const ptr<log_entry>& entry) {
     // NOTE:
     //   Timestamp is used only when `replicate_log_timestamp_` option is on.
     //   Otherwise, log store does not need to store or load it.
@@ -51,17 +53,17 @@ ptr<log_entry> inmem_log_store::make_clone(const ptr<log_entry>& entry) {
     return clone;
 }
 
-ulong inmem_log_store::next_slot() const {
+ulong nl_log_store::next_slot() const {
     std::lock_guard<std::mutex> l(logs_lock_);
     // Exclude the dummy entry.
     return start_idx_ + logs_.size() - 1;
 }
 
-ulong inmem_log_store::start_index() const {
+ulong nl_log_store::start_index() const {
     return start_idx_;
 }
 
-ptr<log_entry> inmem_log_store::last_entry() const {
+ptr<log_entry> nl_log_store::last_entry() const {
     ulong next_idx = next_slot();
     std::lock_guard<std::mutex> l(logs_lock_);
     auto entry = logs_.find( next_idx - 1 );
@@ -72,7 +74,7 @@ ptr<log_entry> inmem_log_store::last_entry() const {
     return make_clone(entry->second);
 }
 
-ulong inmem_log_store::append(ptr<log_entry>& entry) {
+ulong nl_log_store::append(ptr<log_entry>& entry) {
     ptr<log_entry> clone = make_clone(entry);
 
     std::lock_guard<std::mutex> l(logs_lock_);
@@ -82,7 +84,7 @@ ulong inmem_log_store::append(ptr<log_entry>& entry) {
     return idx;
 }
 
-void inmem_log_store::write_at(ulong index, ptr<log_entry>& entry) {
+void nl_log_store::write_at(ulong index, ptr<log_entry>& entry) {
     ptr<log_entry> clone = make_clone(entry);
 
     // Discard all logs equal to or greater than `index.
@@ -96,7 +98,7 @@ void inmem_log_store::write_at(ulong index, ptr<log_entry>& entry) {
 }
 
 ptr< std::vector< ptr<log_entry> > >
-    inmem_log_store::log_entries(ulong start, ulong end)
+    nl_log_store::log_entries(ulong start, ulong end)
 {
     ptr< std::vector< ptr<log_entry> > > ret =
         cs_new< std::vector< ptr<log_entry> > >();
@@ -119,7 +121,7 @@ ptr< std::vector< ptr<log_entry> > >
 }
 
 ptr<std::vector<ptr<log_entry>>>
-    inmem_log_store::log_entries_ext(ulong start,
+    nl_log_store::log_entries_ext(ulong start,
                                      ulong end,
                                      int64 batch_size_hint_in_bytes)
 {
@@ -149,7 +151,7 @@ ptr<std::vector<ptr<log_entry>>>
     return ret;
 }
 
-ptr<log_entry> inmem_log_store::entry_at(ulong index) {
+ptr<log_entry> nl_log_store::entry_at(ulong index) {
     ptr<log_entry> src = nullptr;
     {   std::lock_guard<std::mutex> l(logs_lock_);
         auto entry = logs_.find(index);
@@ -161,7 +163,7 @@ ptr<log_entry> inmem_log_store::entry_at(ulong index) {
     return make_clone(src);
 }
 
-ulong inmem_log_store::term_at(ulong index) {
+ulong nl_log_store::term_at(ulong index) {
     ulong term = 0;
     {   std::lock_guard<std::mutex> l(logs_lock_);
         auto entry = logs_.find(index);
@@ -173,7 +175,7 @@ ulong inmem_log_store::term_at(ulong index) {
     return term;
 }
 
-ptr<buffer> inmem_log_store::pack(ulong index, int32 cnt) {
+ptr<buffer> nl_log_store::pack(ulong index, int32 cnt) {
     std::vector< ptr<buffer> > logs;
 
     size_t size_total = 0;
@@ -203,7 +205,7 @@ ptr<buffer> inmem_log_store::pack(ulong index, int32 cnt) {
     return buf_out;
 }
 
-void inmem_log_store::apply_pack(ulong index, buffer& pack) {
+void nl_log_store::apply_pack(ulong index, buffer& pack) {
     pack.pos(0);
     int32 num_logs = pack.get_int();
 
@@ -230,7 +232,7 @@ void inmem_log_store::apply_pack(ulong index, buffer& pack) {
     }
 }
 
-bool inmem_log_store::compact(ulong last_log_index) {
+bool nl_log_store::compact(ulong last_log_index) {
     std::lock_guard<std::mutex> l(logs_lock_);
     for (ulong ii = start_idx_; ii <= last_log_index; ++ii) {
         auto entry = logs_.find(ii);
@@ -248,14 +250,14 @@ bool inmem_log_store::compact(ulong last_log_index) {
     return true;
 }
 
-bool inmem_log_store::flush() {
+bool nl_log_store::flush() {
     return true;
 }
 
-void inmem_log_store::close() {}
+void nl_log_store::close() {}
 
 
-ulong inmem_log_store::last_durable_index() {
+ulong nl_log_store::last_durable_index() {
     uint64_t last_log = next_slot() - 1;
 
     return last_log;
