@@ -30,14 +30,16 @@ limitations under the License.
 
 using namespace nuraft;
 
-namespace echo_server {
+namespace nuraft_logging {
 
 static const raft_params::return_method_type CALL_TYPE
     = raft_params::blocking;
 //  = raft_params::async_handler;
+}
+//specify namespaces for intellisense
+#include "nl_common.hxx"
 
-#include "example_common.hxx"
-
+namespace nuraft_logging{
 void handle_result(ptr<TestSuite::Timer> timer,
                    raft_result& result,
                    ptr<std::exception>& err)
@@ -173,8 +175,8 @@ bool do_cmd(const std::vector<std::string>& tokens) {
     return true;
 }
 
-}; // namespace echo_server;
-using namespace echo_server;
+}; // namespace nuraft_logging;
+using namespace nuraft_logging;
 
 int main(int argc, char** argv) {
     if (argc < 3) usage(argc, argv);

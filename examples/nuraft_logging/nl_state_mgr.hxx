@@ -23,9 +23,9 @@ limitations under the License.
 
 namespace nuraft {
 
-class inmem_state_mgr: public state_mgr {
+class nl_state_mgr: public state_mgr {
 public:
-    inmem_state_mgr(int srv_id,
+    nl_state_mgr(int srv_id,
                     const std::string& endpoint)
         : my_id_(srv_id)
         , my_endpoint_(endpoint)
@@ -38,7 +38,7 @@ public:
         saved_config_->get_servers().push_back(my_srv_config_);
     }
 
-    ~inmem_state_mgr() {}
+    ~nl_state_mgr() {}
 
     ptr<cluster_config> load_config() {
         // Just return in-memory data in this example.
