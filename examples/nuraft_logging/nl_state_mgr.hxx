@@ -29,7 +29,7 @@ public:
                     const std::string& endpoint)
         : my_id_(srv_id)
         , my_endpoint_(endpoint)
-        , cur_log_store_( cs_new<nl_log_store>() )
+        , cur_log_store_( cs_new<nl_log_store>(srv_id) )
     {
         my_srv_config_ = cs_new<srv_config>( srv_id, endpoint );
 

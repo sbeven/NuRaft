@@ -187,7 +187,7 @@ int main(int argc, char** argv) {
     std::cout << "               Version 0.1.0" << std::endl;
     std::cout << "    Server ID:    " << stuff.server_id_ << std::endl;
     std::cout << "    Endpoint:     " << stuff.endpoint_ << std::endl;
-    init_raft( cs_new<echo_state_machine>() );
+    init_raft( cs_new<nl_state_machine>() );
     loop();
 
     return 0;

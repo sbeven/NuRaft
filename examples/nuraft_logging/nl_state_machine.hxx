@@ -26,13 +26,13 @@ limitations under the License.
 
 using namespace nuraft;
 
-class echo_state_machine : public state_machine {
+class nl_state_machine : public state_machine {
 public:
-    echo_state_machine()
+    nl_state_machine()
         : last_committed_idx_(0)
         {}
 
-    ~echo_state_machine() {}
+    ~nl_state_machine() {}
 
     ptr<buffer> pre_commit(const ulong log_idx, buffer& data) {
         // Extract string from `data.

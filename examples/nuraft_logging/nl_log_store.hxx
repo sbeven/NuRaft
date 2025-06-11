@@ -24,6 +24,7 @@ limitations under the License.
 #include <atomic>
 #include <map>
 #include <mutex>
+#include <fstream>
 
 namespace nuraft {
 
@@ -31,7 +32,7 @@ class raft_server;
 
 class nl_log_store : public log_store {
 public:
-    nl_log_store();
+    nl_log_store(int srv_id);
 
     ~nl_log_store();
 
@@ -93,6 +94,7 @@ private:
      */
     raft_server* raft_server_bwd_pointer_;
 
+    std::fstream log;
 };
 
 }

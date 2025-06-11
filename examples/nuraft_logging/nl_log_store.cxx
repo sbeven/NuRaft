@@ -24,18 +24,20 @@ limitations under the License.
 
 namespace nuraft {
 
-nl_log_store::nl_log_store()
+nl_log_store::nl_log_store(int srv_id)
     : start_idx_(1)
     , raft_server_bwd_pointer_(nullptr)
 {
-    std::fstream fs("log.txt");
+    std::string filename = "log" + std::to_string(srv_id) + ".txt";
+    log = std::fstream(filename, std::ios::in | std::ios::out);
+    assert(log.is_open());
     // Dummy entry for index 0.
     ptr<buffer> buf = buffer::alloc(sz_ulong);
     logs_[0] = cs_new<log_entry>(0, buf);
 }
 
 nl_log_store::~nl_log_store() {
-
+    log.close();
 }
 
 ptr<log_entry> nl_log_store::make_clone(const ptr<log_entry>& entry) {
