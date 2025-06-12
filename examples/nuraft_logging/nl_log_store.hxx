@@ -82,7 +82,7 @@ private:
     /**
      * Lock for `logs_`.
      */
-    mutable std::mutex logs_lock_;
+    mutable std::mutex log_lock_;
 
     /**
      * The index of the first log.

@@ -1,5 +1,5 @@
-build$ ./examples/nuraft-logging 1 localhost:10001
+./examples/nuraft_logging 1 localhost:10001
 
-build$ ./examples/nuraft-logging 2 localhost:10002
+./examples/nuraft_logging 2 localhost:10002
 
-build$ ./examples/nuraft-logging 3 localhost:10003
+./examples/nuraft_logging 3 localhost:10003
