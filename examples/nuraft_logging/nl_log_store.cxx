@@ -22,6 +22,7 @@ limitations under the License.
 #include <iostream>
 #include <cassert>
 #include <fstream>
+#include <climits>
 namespace nuraft {
 
 nl_log_store::nl_log_store(int srv_id)
@@ -38,7 +39,9 @@ nl_log_store::nl_log_store(int srv_id)
     }
     // Dummy entry for index 0.
     ptr<buffer> buf = buffer::alloc(sz_ulong);
-    std::shared_ptr<log_entry> dummy =  cs_new<log_entry>(1500, buf);
+    // uint8_t bytes[8] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+    // buf->put_raw(bytes, 8);
+    std::shared_ptr<log_entry> dummy =  cs_new<log_entry>(0, buf);
     ptr<buffer> sdummy = dummy->serialize();
     buffer_serializer s(sdummy);
     log.seekp(0);
