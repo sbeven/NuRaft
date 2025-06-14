@@ -45,10 +45,13 @@ nl_log_store::nl_log_store(int srv_id)
     ptr<buffer> sdummy = dummy->serialize();
     buffer_serializer s(sdummy);
     log.seekp(0);
-    char * data = reinterpret_cast<char*>(s.get_raw(s.size()));
+    size_t size = s.size();
+    char * data = reinterpret_cast<char*>(s.get_raw(size));
+
+    log.write(reinterpret_cast<const char*>(&size), sizeof(size));
     log.write(data, s.size());
     log.flush();
-    std::cout << "wrote " << s.size() << " bytes" << std::endl;
+    std::cout << "wrote " << size + sizeof(size) << " bytes" << std::endl;
     
     
 }
