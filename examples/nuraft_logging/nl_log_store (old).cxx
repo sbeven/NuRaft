@@ -23,37 +23,41 @@ limitations under the License.
 #include <cassert>
 #include <fstream>
 #include <climits>
-#include <cassert>
-#include "rocksdb/db.h"
-
 namespace nuraft {
 
 nl_log_store::nl_log_store(int srv_id)
     : start_idx_(1)
     , raft_server_bwd_pointer_(nullptr)
+    , logs_size(0)
 {
-    rocksdb::Options options;
-    options.create_if_missing = true;
-    rocksdb::Status status =
-        rocksdb::DB::Open(options, "./logs", &logs);
-    assert(status.ok());
-    uint64_t count = 0;
-
-    ptr<buffer> buf = buffer::alloc(sz_ulong);
-    rocksdb::Status s = logs->Put(rocksdb::WriteOptions(), 0, cs_new<log_entry>(0, buf));
-
-    rocksdb::Iterator* it = logs->NewIterator(rocksdb::ReadOptions());
-    for (it->SeekToFirst(); it->Valid(); it->Next()) {
-    ++count;
+    std::string filename = "log" + std::to_string(srv_id) + ".txt";
+    log.open(filename, std::ios::in | std::ios::out | std::ios::binary);
+    if (!log.is_open()) {
+        // File may not exist, create it first (since we cant read from a nonexistent file)
+        std::ofstream create(filename, std::ios::binary);
+        create.close();
+        log.open(filename, std::ios::in | std::ios::out | std::ios::binary);
     }
-    delete it;
+    // Dummy entry for index 0.
+    ptr<buffer> buf = buffer::alloc(sz_ulong);
+    // uint8_t bytes[8] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+    // buf->put_raw(bytes, 8);
+    std::shared_ptr<log_entry> dummy =  cs_new<log_entry>(0, buf);
+    ptr<buffer> sdummy = dummy->serialize();
+    buffer_serializer s(sdummy);
+    log.seekp(0);
+    size_t size = s.size();
+    char * data = reinterpret_cast<char*>(s.get_raw(size));
 
-    std::cout << "Exact number of keys: " << count << std::endl;
+    log.write(reinterpret_cast<const char*>(&size), sizeof(size));
+    log.write(data, s.size());
+    log.flush();
+    
     
 }
 
 nl_log_store::~nl_log_store() {
-    delete logs;
+    log.close();
 }
 
 ptr<log_entry> nl_log_store::make_clone(const ptr<log_entry>& entry) {
@@ -74,7 +78,7 @@ ptr<log_entry> nl_log_store::make_clone(const ptr<log_entry>& entry) {
 ulong nl_log_store::next_slot() const {
     std::lock_guard<std::mutex> l(log_lock_);
     // Exclude the dummy entry.
-    return start_idx_ + logs_.size() - 1;
+    return start_idx_ + logs_size - 1;
 }
 
 ulong nl_log_store::start_index() const {

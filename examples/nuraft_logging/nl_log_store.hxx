@@ -25,6 +25,7 @@ limitations under the License.
 #include <map>
 #include <mutex>
 #include <fstream>
+#include "rocksdb/db.h"
 
 namespace nuraft {
 
@@ -74,9 +75,7 @@ public:
 private:
     static ptr<log_entry> make_clone(const ptr<log_entry>& entry);
 
-    /**
-     * Map of <log index, log data>.
-     */
+ 
     std::map<ulong, ptr<log_entry>> logs_;
 
     /**
@@ -95,6 +94,11 @@ private:
     raft_server* raft_server_bwd_pointer_;
 
     std::fstream log;
+    
+   /**
+     * Persistent map of <log index, log data>.
+     */
+    rocksdb::DB* logs;
 };
 
 }

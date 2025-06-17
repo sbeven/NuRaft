@@ -13,7 +13,7 @@ option(THREAD_SANITIZER "Enable thread sanitizer" OFF)
 option(BUILD_EXAMPLES "Build examples" ON)
 
 if(NOT CMAKE_CXX_STANDARD)
-    set(CMAKE_CXX_STANDARD 11)
+    set(CMAKE_CXX_STANDARD 17)
 endif()
 message(STATUS "C++ Standard: " ${CMAKE_CXX_STANDARD})
 
