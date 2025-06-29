@@ -35,18 +35,18 @@ nl_log_store::nl_log_store(int srv_id)
     rocksdb::Options options;
     options.create_if_missing = true;
     rocksdb::Status status =
-        rocksdb::DB::Open(options, "./logs", &logs);
+        rocksdb::DB::Open(options, "./logs" + std::to_string(srv_id), &logs);
     assert(status.ok());
     uint64_t count = 0;
 
-    ptr<buffer> buf = buffer::alloc(sz_ulong);
-    rocksdb::Status s = logs->Put(rocksdb::WriteOptions(), 0, cs_new<log_entry>(0, buf));
+    // ptr<buffer> buf = buffer::alloc(sz_ulong);
+    // rocksdb::Status s = logs->Put(rocksdb::WriteOptions(), 0, cs_new<log_entry>(0, buf));
 
-    rocksdb::Iterator* it = logs->NewIterator(rocksdb::ReadOptions());
-    for (it->SeekToFirst(); it->Valid(); it->Next()) {
-    ++count;
-    }
-    delete it;
+    // rocksdb::Iterator* it = logs->NewIterator(rocksdb::ReadOptions());
+    // for (it->SeekToFirst(); it->Valid(); it->Next()) {
+    // ++count;
+    // }
+    // delete it;
 
     std::cout << "Exact number of keys: " << count << std::endl;
     
