@@ -25,8 +25,20 @@ limitations under the License.
 #include <climits>
 #include <cassert>
 #include "rocksdb/db.h"
+#include <iomanip>
 
 namespace nuraft {
+
+void printStringAsHex(const std::string& str) {
+    for (char c : str) {
+        // Cast char to int to ensure correct hexadecimal representation
+        // Use std::hex to print in hexadecimal
+        // Use std::setw(2) and std::setfill('0') for two-digit, zero-padded hex
+        std::cout << std::hex << std::setw(2) << std::setfill('0') 
+                  << static_cast<int>(static_cast<unsigned char>(c)) << " ";
+    }
+    std::cout << std::endl;
+}
 
 nl_log_store::nl_log_store(int srv_id)
     : start_idx_(1)
@@ -39,17 +51,42 @@ nl_log_store::nl_log_store(int srv_id)
     assert(status.ok());
     uint64_t count = 0;
 
-    // ptr<buffer> buf = buffer::alloc(sz_ulong);
-    // rocksdb::Status s = logs->Put(rocksdb::WriteOptions(), 0, cs_new<log_entry>(0, buf));
+    ptr<buffer> buf = buffer::alloc(sz_ulong);
+    // make a dummy entry
+    std::shared_ptr<log_entry> dummy =  cs_new<log_entry>(0, buf);
+    // serrialize it
+    ptr<buffer> sdummy = dummy->serialize();
+    // buffer_serializer s(sdummy);
+    // // get size of data
+    // size_t size = s.size();
+    // char * data = reinterpret_cast<char*>(s.get_raw(size));
+    // turn it into string
+    std::string str(reinterpret_cast<char*>(sdummy->data_begin()), sdummy->size());
+    status = logs->Put(rocksdb::WriteOptions(), "0", str);
+    assert(status.ok());
 
-    // rocksdb::Iterator* it = logs->NewIterator(rocksdb::ReadOptions());
-    // for (it->SeekToFirst(); it->Valid(); it->Next()) {
-    // ++count;
-    // }
-    // delete it;
+    rocksdb::Iterator* it = logs->NewIterator(rocksdb::ReadOptions());
+    for (it->SeekToFirst(); it->Valid(); it->Next()) {
+
+    std::string value = it->value().ToString();
+    std::cout << "key: " << it->key().ToString() << std::endl;
+    if (it->key().ToString() != "size") {
+        printStringAsHex(value);
+        ptr<buffer> buf = buffer::alloc(value.size());
+        std::memcpy(buf->data_begin(), value.data(), value.size());
+        ptr<log_entry> log = log_entry::deserialize(*buf);
+        std::cout << "Log entry:" << log->get_term() << " size: " << log->get_buf().size() << std::endl;
+    }
+
+    ++count;
+    }
+    delete it;
 
     std::cout << "Exact number of keys: " << count << std::endl;
-    
+    logs->Put(rocksdb::WriteOptions(), "size", std::to_string(count));
+
+    ptr<log_entry> log = last_entry();
+    std::cout << "Log entry:" << log->get_term() << " size: " << log->get_buf().size() << std::endl;
 }
 
 nl_log_store::~nl_log_store() {
@@ -74,7 +111,9 @@ ptr<log_entry> nl_log_store::make_clone(const ptr<log_entry>& entry) {
 ulong nl_log_store::next_slot() const {
     std::lock_guard<std::mutex> l(log_lock_);
     // Exclude the dummy entry.
-    return start_idx_ + logs_.size() - 1;
+    std::string value;
+    logs->Get(rocksdb::ReadOptions(), "size", &value);
+    return start_idx_ + std::stoi(value) - 1;
 }
 
 ulong nl_log_store::start_index() const {
@@ -83,13 +122,19 @@ ulong nl_log_store::start_index() const {
 
 ptr<log_entry> nl_log_store::last_entry() const {
     ulong next_idx = next_slot();
+    std::string value;
     std::lock_guard<std::mutex> l(log_lock_);
-    auto entry = logs_.find( next_idx - 1 );
-    if (entry == logs_.end()) {
-        entry = logs_.find(0);
+    // value will contain log entry, serialized
+    rocksdb::Status status = 
+    logs->Get(rocksdb::ReadOptions(), std::to_string(next_idx - 1), &value);
+    if (status.IsNotFound()) {
+        logs->Get(rocksdb::ReadOptions(), "0", &value);
     }
+    ptr<buffer> buf = buffer::alloc(value.size());
+    std::memcpy(buf->data_begin(), value.data(), value.size());
+    ptr<log_entry> entry = log_entry::deserialize(*buf);
 
-    return make_clone(entry->second);
+    return make_clone(entry);
 }
 
 ulong nl_log_store::append(ptr<log_entry>& entry) {
