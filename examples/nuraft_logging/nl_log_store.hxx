@@ -26,6 +26,7 @@ limitations under the License.
 #include <mutex>
 #include <fstream>
 #include "rocksdb/db.h"
+#include <set>
 
 namespace nuraft {
 
@@ -39,7 +40,6 @@ public:
 
     __nocopy__(nl_log_store);
 
-public:
     ulong next_slot() const;
 
     ulong start_index() const;
@@ -71,11 +71,17 @@ public:
 
     ulong last_durable_index();
 
+    void write_log_entry_string(std::string key, ptr<log_entry> entry);
+    void read_log_entry_string(std::string key, ptr<log_entry> *entry) const;
+    void write_log_entry(ulong key, ptr<log_entry> entry);
+    void read_log_entry(ulong key, ptr<log_entry> *entry) const;
+
 
 private:
     static ptr<log_entry> make_clone(const ptr<log_entry>& entry);
 
- 
+    // can remove when we don't have any references to it anymore in 
+    // nl_log_store
     std::map<ulong, ptr<log_entry>> logs_;
 
     /**
@@ -98,7 +104,8 @@ private:
    /**
      * Persistent map of <log index, log data>.
      */
-    rocksdb::DB* logs;
+    rocksdb::DB* rocksdb_log_;
+    std::set<ulong> rocksdb_keys_;
 };
 
 }

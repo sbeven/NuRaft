@@ -26,6 +26,7 @@ limitations under the License.
 #include <cassert>
 #include "rocksdb/db.h"
 #include <iomanip>
+#include <cstdint>
 
 namespace nuraft {
 
@@ -40,6 +41,35 @@ void printStringAsHex(const std::string& str) {
     std::cout << std::endl;
 }
 
+void nl_log_store::write_log_entry_string(std::string key, ptr<log_entry> entry) {
+    ptr<buffer> s_entry = entry->serialize();
+    std::string str(reinterpret_cast<char*>(s_entry->data_begin()), s_entry->size());
+    rocksdb::Status status = rocksdb_log_->Put(rocksdb::WriteOptions(), "0", str);
+    assert(status.ok());
+    rocksdb_keys_.insert(std::stoull(key));
+}
+
+void nl_log_store::write_log_entry(ulong key, ptr<log_entry> entry) {
+    write_log_entry_string(std::to_string(key), entry);
+}
+
+void nl_log_store::read_log_entry_string(std::string key, ptr<log_entry> *entry) const {
+    std::string value;
+    // value will contain log entry, serialized
+    rocksdb::Status status = 
+    rocksdb_log_->Get(rocksdb::ReadOptions(), key, &value);
+    if (status.IsNotFound()) {
+        rocksdb_log_->Get(rocksdb::ReadOptions(), "0", &value);
+    }
+    ptr<buffer> buf = buffer::alloc(value.size());
+    std::memcpy(buf->data_begin(), value.data(), value.size());
+    *entry = log_entry::deserialize(*buf);
+}
+
+void nl_log_store::read_log_entry(ulong key, ptr<log_entry> *entry) const {
+    read_log_entry_string(std::to_string(key), entry);
+}
+
 nl_log_store::nl_log_store(int srv_id)
     : start_idx_(1)
     , raft_server_bwd_pointer_(nullptr)
@@ -47,50 +77,42 @@ nl_log_store::nl_log_store(int srv_id)
     rocksdb::Options options;
     options.create_if_missing = true;
     rocksdb::Status status =
-        rocksdb::DB::Open(options, "./logs" + std::to_string(srv_id), &logs);
-    assert(status.ok());
-    uint64_t count = 0;
-
-    ptr<buffer> buf = buffer::alloc(sz_ulong);
-    // make a dummy entry
-    std::shared_ptr<log_entry> dummy =  cs_new<log_entry>(0, buf);
-    // serrialize it
-    ptr<buffer> sdummy = dummy->serialize();
-    // buffer_serializer s(sdummy);
-    // // get size of data
-    // size_t size = s.size();
-    // char * data = reinterpret_cast<char*>(s.get_raw(size));
-    // turn it into string
-    std::string str(reinterpret_cast<char*>(sdummy->data_begin()), sdummy->size());
-    status = logs->Put(rocksdb::WriteOptions(), "0", str);
+        rocksdb::DB::Open(options, "./logs" + std::to_string(srv_id), &rocksdb_log_);
     assert(status.ok());
 
-    rocksdb::Iterator* it = logs->NewIterator(rocksdb::ReadOptions());
+
+    // get all keys and print them out while we're at it
+    rocksdb::Iterator* it = rocksdb_log_->NewIterator(rocksdb::ReadOptions());
     for (it->SeekToFirst(); it->Valid(); it->Next()) {
-
     std::string value = it->value().ToString();
-    std::cout << "key: " << it->key().ToString() << std::endl;
-    if (it->key().ToString() != "size") {
-        printStringAsHex(value);
-        ptr<buffer> buf = buffer::alloc(value.size());
-        std::memcpy(buf->data_begin(), value.data(), value.size());
-        ptr<log_entry> log = log_entry::deserialize(*buf);
-        std::cout << "Log entry:" << log->get_term() << " size: " << log->get_buf().size() << std::endl;
-    }
+    std::string key = it->key().ToString();
+    std::cout << "key: " << key << std::endl;
+    rocksdb_keys_.insert(std::stoull(key));
+    printStringAsHex(value);
 
-    ++count;
+    ptr<buffer> buf = buffer::alloc(value.size());
+    std::memcpy(buf->data_begin(), value.data(), value.size());
+    ptr<log_entry> log = log_entry::deserialize(*buf);
+    std::cout << "Log entry:" << log->get_term() << " size: " << log->get_buf().size() << std::endl;
+   
     }
     delete it;
 
-    std::cout << "Exact number of keys: " << count << std::endl;
-    logs->Put(rocksdb::WriteOptions(), "size", std::to_string(count));
+    std::cout << "Exact number of keys: " << rocksdb_keys_.size() << std::endl;
+    
+
+    ptr<buffer> buf = buffer::alloc(sz_ulong);
+    // make a dummy entry
+    ptr<log_entry> dummy =  cs_new<log_entry>(0, buf);
+    write_log_entry_string("0", dummy);
+
 
     ptr<log_entry> log = last_entry();
     std::cout << "Log entry:" << log->get_term() << " size: " << log->get_buf().size() << std::endl;
 }
 
 nl_log_store::~nl_log_store() {
-    delete logs;
+    delete rocksdb_log_;
 }
 
 ptr<log_entry> nl_log_store::make_clone(const ptr<log_entry>& entry) {
@@ -111,9 +133,7 @@ ptr<log_entry> nl_log_store::make_clone(const ptr<log_entry>& entry) {
 ulong nl_log_store::next_slot() const {
     std::lock_guard<std::mutex> l(log_lock_);
     // Exclude the dummy entry.
-    std::string value;
-    logs->Get(rocksdb::ReadOptions(), "size", &value);
-    return start_idx_ + std::stoi(value) - 1;
+    return start_idx_ + rocksdb_keys_.size() - 1;
 }
 
 ulong nl_log_store::start_index() const {
@@ -121,18 +141,9 @@ ulong nl_log_store::start_index() const {
 }
 
 ptr<log_entry> nl_log_store::last_entry() const {
-    ulong next_idx = next_slot();
-    std::string value;
+    ptr<log_entry> entry;
     std::lock_guard<std::mutex> l(log_lock_);
-    // value will contain log entry, serialized
-    rocksdb::Status status = 
-    logs->Get(rocksdb::ReadOptions(), std::to_string(next_idx - 1), &value);
-    if (status.IsNotFound()) {
-        logs->Get(rocksdb::ReadOptions(), "0", &value);
-    }
-    ptr<buffer> buf = buffer::alloc(value.size());
-    std::memcpy(buf->data_begin(), value.data(), value.size());
-    ptr<log_entry> entry = log_entry::deserialize(*buf);
+    read_log_entry(next_slot() - 1, &entry);
 
     return make_clone(entry);
 }
@@ -141,8 +152,8 @@ ulong nl_log_store::append(ptr<log_entry>& entry) {
     ptr<log_entry> clone = make_clone(entry);
 
     std::lock_guard<std::mutex> l(log_lock_);
-    size_t idx = start_idx_ + logs_.size() - 1;
-    logs_[idx] = clone;
+    size_t idx = start_idx_ + rocksdb_keys_.size() - 1;
+    write_log_entry(idx, clone);
 
     return idx;
 }
@@ -152,11 +163,10 @@ void nl_log_store::write_at(ulong index, ptr<log_entry>& entry) {
 
     // Discard all logs equal to or greater than `index.
     std::lock_guard<std::mutex> l(log_lock_);
-    auto itr = logs_.lower_bound(index);
-    while (itr != logs_.end()) {
-        itr = logs_.erase(itr);
+    for (ulong i = *rocksdb_keys_.lower_bound(index); i != *rocksdb_keys_.end(); i++) {
+        rocksdb_log_->Delete(rocksdb::WriteOptions(), std::to_string(i));
     }
-    logs_[index] = clone;
+    write_log_entry(index, clone);
 
 }
 
