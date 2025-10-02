@@ -72,9 +72,9 @@ public:
     ulong last_durable_index();
 
     void write_log_entry_string(std::string key, ptr<log_entry> entry);
-    void read_log_entry_string(std::string key, ptr<log_entry> *entry) const;
+    rocksdb::Status read_log_entry_string(std::string key, ptr<log_entry> *entry) const;
     void write_log_entry(ulong key, ptr<log_entry> entry);
-    void read_log_entry(ulong key, ptr<log_entry> *entry) const;
+    rocksdb::Status read_log_entry(ulong key, ptr<log_entry> *entry) const;
 
 
 private:

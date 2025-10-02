@@ -53,7 +53,7 @@ void nl_log_store::write_log_entry(ulong key, ptr<log_entry> entry) {
     write_log_entry_string(std::to_string(key), entry);
 }
 
-void nl_log_store::read_log_entry_string(std::string key, ptr<log_entry> *entry) const {
+rocksdb::Status nl_log_store::read_log_entry_string(std::string key, ptr<log_entry> *entry) const {
     std::string value;
     // value will contain log entry, serialized
     rocksdb::Status status = 
@@ -64,10 +64,11 @@ void nl_log_store::read_log_entry_string(std::string key, ptr<log_entry> *entry)
     ptr<buffer> buf = buffer::alloc(value.size());
     std::memcpy(buf->data_begin(), value.data(), value.size());
     *entry = log_entry::deserialize(*buf);
+    return status;
 }
 
-void nl_log_store::read_log_entry(ulong key, ptr<log_entry> *entry) const {
-    read_log_entry_string(std::to_string(key), entry);
+rocksdb::Status nl_log_store::read_log_entry(ulong key, ptr<log_entry> *entry) const {
+    return read_log_entry_string(std::to_string(key), entry);
 }
 
 nl_log_store::nl_log_store(int srv_id)
@@ -143,6 +144,7 @@ ulong nl_log_store::start_index() const {
 ptr<log_entry> nl_log_store::last_entry() const {
     ptr<log_entry> entry;
     std::lock_guard<std::mutex> l(log_lock_);
+    // read_log_entry wil return dummy entry if not found
     read_log_entry(next_slot() - 1, &entry);
 
     return make_clone(entry);
@@ -181,12 +183,10 @@ ptr< std::vector< ptr<log_entry> > >
     for (ulong ii = start ; ii < end ; ++ii) {
         ptr<log_entry> src = nullptr;
         {   std::lock_guard<std::mutex> l(log_lock_);
-            auto entry = logs_.find(ii);
-            if (entry == logs_.end()) {
-                entry = logs_.find(0);
+            // if we have to return the dummy entry something went wrong
+            if (!read_log_entry(ii, &src).ok()) {
                 assert(0);
             }
-            src = entry->second;
         }
         (*ret)[cc++] = make_clone(src);
     }
@@ -209,12 +209,10 @@ ptr<std::vector<ptr<log_entry>>>
     for (ulong ii = start ; ii < end ; ++ii) {
         ptr<log_entry> src = nullptr;
         {   std::lock_guard<std::mutex> l(log_lock_);
-            auto entry = logs_.find(ii);
-            if (entry == logs_.end()) {
-                entry = logs_.find(0);
+            // if we have to return the dummy entry something went wrong
+            if (!read_log_entry(ii, &src).ok()) {
                 assert(0);
             }
-            src = entry->second;
         }
         ret->push_back(make_clone(src));
         accum_size += src->get_buf().size();
