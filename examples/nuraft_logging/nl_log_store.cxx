@@ -225,23 +225,17 @@ ptr<std::vector<ptr<log_entry>>>
 ptr<log_entry> nl_log_store::entry_at(ulong index) {
     ptr<log_entry> src = nullptr;
     {   std::lock_guard<std::mutex> l(log_lock_);
-        auto entry = logs_.find(index);
-        if (entry == logs_.end()) {
-            entry = logs_.find(0);
-        }
-        src = entry->second;
+        read_log_entry(index, &src);
     }
     return make_clone(src);
 }
 
 ulong nl_log_store::term_at(ulong index) {
     ulong term = 0;
+    ptr<log_entry> src = nullptr;
     {   std::lock_guard<std::mutex> l(log_lock_);
-        auto entry = logs_.find(index);
-        if (entry == logs_.end()) {
-            entry = logs_.find(0);
-        }
-        term = entry->second->get_term();
+        read_log_entry(index, &src);
+        term = src->get_term();
     }
     return term;
 }
@@ -253,8 +247,10 @@ ptr<buffer> nl_log_store::pack(ulong index, int32 cnt) {
     for (ulong ii=index; ii<index+cnt; ++ii) {
         ptr<log_entry> le = nullptr;
         {   std::lock_guard<std::mutex> l(log_lock_);
-            le = logs_[ii];
+             rocksdb::Status s = read_log_entry(index, &le);
+             assert(s.ok());
         }
+        // i think this assert checks that we are not with a dummy pointer
         assert(le.get());
         ptr<buffer> buf = le->serialize();
         size_total += buf->size();
@@ -289,7 +285,7 @@ void nl_log_store::apply_pack(ulong index, buffer& pack) {
 
         ptr<log_entry> le = log_entry::deserialize(*buf_local);
         {   std::lock_guard<std::mutex> l(log_lock_);
-            logs_[cur_idx] = le;
+            write_log_entry(cur_idx, le);
         }
     }
 
