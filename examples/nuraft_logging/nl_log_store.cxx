@@ -166,7 +166,9 @@ void nl_log_store::write_at(ulong index, ptr<log_entry>& entry) {
     // Discard all logs equal to or greater than `index.
     std::lock_guard<std::mutex> l(log_lock_);
     for (ulong i = *rocksdb_keys_.lower_bound(index); i != *rocksdb_keys_.end(); i++) {
-        rocksdb_log_->Delete(rocksdb::WriteOptions(), std::to_string(i));
+        // delete and assert it succeeded
+        assert(rocksdb_log_->Delete(rocksdb::WriteOptions(), std::to_string(i)).ok());
+        rocksdb_keys_.erase(i);
     }
     write_log_entry(index, clone);
 
@@ -290,9 +292,9 @@ void nl_log_store::apply_pack(ulong index, buffer& pack) {
     }
 
     {   std::lock_guard<std::mutex> l(log_lock_);
-        auto entry = logs_.upper_bound(0);
-        if (entry != logs_.end()) {
-            start_idx_ = entry->first;
+        auto entry = rocksdb_keys_.upper_bound(0);
+        if (entry != rocksdb_keys_.end()) {
+            start_idx_ = *entry;
         } else {
             start_idx_ = 1;
         }
@@ -302,9 +304,11 @@ void nl_log_store::apply_pack(ulong index, buffer& pack) {
 bool nl_log_store::compact(ulong last_log_index) {
     std::lock_guard<std::mutex> l(log_lock_);
     for (ulong ii = start_idx_; ii <= last_log_index; ++ii) {
-        auto entry = logs_.find(ii);
-        if (entry != logs_.end()) {
-            logs_.erase(entry);
+        auto entry = rocksdb_keys_.find(ii);
+        if (entry != rocksdb_keys_.end()) {
+            // delete and assert it succeeded
+            assert(rocksdb_log_->Delete(rocksdb::WriteOptions(), std::to_string(*entry)).ok());
+            rocksdb_keys_.erase(entry);
         }
     }
 

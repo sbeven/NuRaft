@@ -80,12 +80,8 @@ public:
 private:
     static ptr<log_entry> make_clone(const ptr<log_entry>& entry);
 
-    // can remove when we don't have any references to it anymore in 
-    // nl_log_store
-    std::map<ulong, ptr<log_entry>> logs_;
-
     /**
-     * Lock for `logs_`.
+     * Lock for rocksdb logs.
      */
     mutable std::mutex log_lock_;
 
