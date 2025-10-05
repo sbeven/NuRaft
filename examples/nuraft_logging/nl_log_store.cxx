@@ -91,9 +91,8 @@ nl_log_store::nl_log_store(int srv_id)
     rocksdb_keys_.insert(std::stoull(key));
     printStringAsHex(value);
 
-    ptr<buffer> buf = buffer::alloc(value.size());
-    std::memcpy(buf->data_begin(), value.data(), value.size());
-    ptr<log_entry> log = log_entry::deserialize(*buf);
+    ptr<log_entry> log;
+    read_log_entry_string(key, &log);
     std::cout << "Log entry:" << log->get_term() << " size: " << log->get_buf().size() << std::endl;
    
     }
@@ -106,10 +105,6 @@ nl_log_store::nl_log_store(int srv_id)
     // make a dummy entry
     ptr<log_entry> dummy =  cs_new<log_entry>(0, buf);
     write_log_entry_string("0", dummy);
-
-
-    ptr<log_entry> log = last_entry();
-    std::cout << "Log entry:" << log->get_term() << " size: " << log->get_buf().size() << std::endl;
 }
 
 nl_log_store::~nl_log_store() {
@@ -143,9 +138,10 @@ ulong nl_log_store::start_index() const {
 
 ptr<log_entry> nl_log_store::last_entry() const {
     ptr<log_entry> entry;
+    ulong next_idx = next_slot();
     std::lock_guard<std::mutex> l(log_lock_);
     // read_log_entry wil return dummy entry if not found
-    read_log_entry(next_slot() - 1, &entry);
+    read_log_entry(next_idx - 1, &entry);
 
     return make_clone(entry);
 }
