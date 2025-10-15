@@ -161,10 +161,10 @@ void nl_log_store::write_at(ulong index, ptr<log_entry>& entry) {
 
     // Discard all logs equal to or greater than `index.
     std::lock_guard<std::mutex> l(log_lock_);
-    for (ulong i = *rocksdb_keys_.lower_bound(index); i != *rocksdb_keys_.end(); i++) {
-        // delete and assert it succeeded
-        assert(rocksdb_log_->Delete(rocksdb::WriteOptions(), std::to_string(i)).ok());
-        rocksdb_keys_.erase(i);
+    auto it = rocksdb_keys_.lower_bound(index);
+    while (it != rocksdb_keys_.end()) {
+        assert(rocksdb_log_->Delete(rocksdb::WriteOptions(), std::to_string(*it)).ok());
+        it = rocksdb_keys_.erase(it);
     }
     write_log_entry(index, clone);
 
@@ -245,7 +245,7 @@ ptr<buffer> nl_log_store::pack(ulong index, int32 cnt) {
     for (ulong ii=index; ii<index+cnt; ++ii) {
         ptr<log_entry> le = nullptr;
         {   std::lock_guard<std::mutex> l(log_lock_);
-             rocksdb::Status s = read_log_entry(index, &le);
+             rocksdb::Status s = read_log_entry(ii, &le);
              assert(s.ok());
         }
         // i think this assert checks that we are not with a dummy pointer
