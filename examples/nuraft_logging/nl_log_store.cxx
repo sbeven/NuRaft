@@ -44,7 +44,7 @@ void printStringAsHex(const std::string& str) {
 void nl_log_store::write_log_entry_string(std::string key, ptr<log_entry> entry) {
     ptr<buffer> s_entry = entry->serialize();
     std::string str(reinterpret_cast<char*>(s_entry->data_begin()), s_entry->size());
-    rocksdb::Status status = rocksdb_log_->Put(rocksdb::WriteOptions(), "0", str);
+    rocksdb::Status status = rocksdb_log_->Put(rocksdb::WriteOptions(), key, str);
     assert(status.ok());
     rocksdb_keys_.insert(std::stoull(key));
 }
