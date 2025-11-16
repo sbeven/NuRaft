@@ -11,9 +11,10 @@ option(USE_PTHREAD_EXIT "Call pthread_exit on server threads" OFF)
 option(ADDRESS_SANITIZER "Enable address sanitizer" OFF)
 option(THREAD_SANITIZER "Enable thread sanitizer" OFF)
 option(BUILD_EXAMPLES "Build examples" ON)
+option(ROCKSDB_STORAGE "Enable RocksDB storage example" ON)
 
 if(NOT CMAKE_CXX_STANDARD)
-    set(CMAKE_CXX_STANDARD 17)
+    set(CMAKE_CXX_STANDARD 20)
 endif()
 message(STATUS "C++ Standard: " ${CMAKE_CXX_STANDARD})
 
@@ -74,6 +75,16 @@ if(WITH_CONAN)
     set(LIBZ ZLIB::ZLIB)
 
 else()
+    if(ROCKSDB_STORAGE)
+        message(STATUS "RocksDB storage is enabled, building with RocksDB dependency")
+        set(ROCKSDB_DIR "${PROJECT_SOURCE_DIR}/rocksdb")
+        set(ROCKSDB_INCLUDE_DIR "${ROCKSDB_DIR}/include")
+        set(LIBROCKSDB "${ROCKSDB_DIR}/librocksdb.a")
+        message(STATUS "RocksDB include path: " ${ROCKSDB_INCLUDE_DIR})
+        message(STATUS "RocksDB library path: " ${LIBROCKSDB})
+        #include_directories(BEFORE ${ROCKSDB_INCLUDE_DIR})
+    endif()
+
     if(NOT DISABLE_ASIO)
         # === Find ASIO ===
         if(BOOST_INCLUDE_PATH AND BOOST_LIBRARY_PATH)
@@ -193,7 +204,8 @@ set(LIBRARIES
     ${LIBCRYPTO}
     ${LIBBOOST_SYSTEM}
     ${LIBDL}
-    ${LIBZ})
+    ${LIBZ}
+)
 
 # === Compiler flags ===
 option(USE_PTHREAD_EXIT "Call pthread_exit on server threads" OFF)

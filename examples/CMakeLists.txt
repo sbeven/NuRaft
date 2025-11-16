@@ -38,13 +38,13 @@ add_executable(nuraft_logging
 
 target_include_directories(nuraft_logging
     PRIVATE
-    ${CMAKE_SOURCE_DIR}/include/rocksdb
+    ${ROCKSDB_INCLUDE_DIR}
 )
 
 target_link_libraries(nuraft_logging
                       ${LIBRARY_NAME}
                       ${LIBRARIES}
-                      ${CMAKE_SOURCE_DIR}/examples/nuraft_logging/librocksdb.a
+                      ${LIBROCKSDB}
                         pthread
                         z
                         snappy
