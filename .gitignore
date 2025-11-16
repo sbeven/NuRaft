@@ -24,3 +24,4 @@ compile_commands.json
 
 # I put the librocksdb.a file in nuraft_logging, make sure to replace it when pulling
 examples/nuraft_logging/librocksdb.a
+cscope*
