@@ -21,14 +21,19 @@ limitations under the License.
 #include "internal_timer.hxx"
 #include "log_store.hxx"
 
+#include "rocksdb/db.h"
+#include "rocksdb/options.h"
+#include "rocksdb/utilities/transaction_db.h"
+
 #include <atomic>
+#include <fstream>
 #include <map>
 #include <mutex>
-#include <fstream>
-#include "rocksdb/db.h"
 #include <set>
 
 namespace nuraft {
+
+using namespace ROCKSDB_NAMESPACE;
 
 class raft_server;
 
@@ -52,8 +57,8 @@ public:
 
     ptr<std::vector<ptr<log_entry>>> log_entries(ulong start, ulong end);
 
-    ptr<std::vector<ptr<log_entry>>> log_entries_ext(
-            ulong start, ulong end, int64 batch_size_hint_in_bytes = 0);
+    ptr<std::vector<ptr<log_entry>>>
+    log_entries_ext(ulong start, ulong end, int64 batch_size_hint_in_bytes = 0);
 
     ptr<log_entry> entry_at(ulong index);
 
@@ -72,13 +77,17 @@ public:
     ulong last_durable_index();
 
     void write_log_entry_string(std::string key, ptr<log_entry> entry);
-    rocksdb::Status read_log_entry_string(std::string key, ptr<log_entry> *entry) const;
     void write_log_entry(ulong key, ptr<log_entry> entry);
-    rocksdb::Status read_log_entry(ulong key, ptr<log_entry> *entry) const;
-
+    void write_log_entry(Slice key, ptr<log_entry> entry);
+    rocksdb::Status read_log_entry(ulong key, ptr<log_entry>* entry) const;
+    rocksdb::Status read_log_entry(Slice key, ptr<log_entry>* entry) const;
 
 private:
     static ptr<log_entry> make_clone(const ptr<log_entry>& entry);
+
+    void InitDBGeneralOptions();
+
+    void InitDB(const std::string& db_path);
 
     /**
      * Lock for rocksdb logs.
@@ -96,13 +105,24 @@ private:
     raft_server* raft_server_bwd_pointer_;
 
     std::fstream log;
-    
-   /**
+
+    /**
      * Persistent map of <log index, log data>.
      */
-    rocksdb::DB* rocksdb_log_;
+    // rocksdb::DB* rocksdb_log_;
     std::set<ulong> rocksdb_keys_;
+
+    // DB instance
+    DB* db_;
+    Options options_;
+
+    // TransactionDB instance
+    TransactionDB* txn_db_;
+    TransactionDBOptions txn_db_options_;
+    
+    TransactionOptions default_txn_options_;
+    WriteOptions default_write_options_;
+    ReadOptions default_read_options_;
 };
 
-}
-
+} // namespace nuraft
