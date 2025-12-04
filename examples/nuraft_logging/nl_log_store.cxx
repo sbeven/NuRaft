@@ -42,32 +42,40 @@ void printStringAsHex(const std::string& str) {
 }
 
 void nl_log_store::write_log_entry_string(std::string key, ptr<log_entry> entry) {
+    std::cout << "writing " + key << std::endl;
     ptr<buffer> s_entry = entry->serialize();
     std::string str(reinterpret_cast<char*>(s_entry->data_begin()), s_entry->size());
+    rocksdb::WriteOptions write_options;
+    write_options.sync = true;
     rocksdb::Status status = rocksdb_log_->Put(rocksdb::WriteOptions(), key, str);
     assert(status.ok());
     rocksdb_keys_.insert(std::stoull(key));
 }
 
 void nl_log_store::write_log_entry(ulong key, ptr<log_entry> entry) {
+    std::cout << "Entering function: write_log_entry" << std::endl;
     write_log_entry_string(std::to_string(key), entry);
 }
 
 rocksdb::Status nl_log_store::read_log_entry_string(std::string key, ptr<log_entry> *entry) const {
+    std::cout << "reading " + key << std::endl;
     std::string value;
+    rocksdb::ReadOptions read_options = rocksdb::ReadOptions();
     // value will contain log entry, serialized
     rocksdb::Status status = 
     rocksdb_log_->Get(rocksdb::ReadOptions(), key, &value);
-    if (status.IsNotFound()) {
+    if (!status.ok()) {
         rocksdb_log_->Get(rocksdb::ReadOptions(), "0", &value);
     }
     ptr<buffer> buf = buffer::alloc(value.size());
     std::memcpy(buf->data_begin(), value.data(), value.size());
     *entry = log_entry::deserialize(*buf);
+    std::cout << "reading " + key << "ends" << std::endl;
     return status;
 }
 
 rocksdb::Status nl_log_store::read_log_entry(ulong key, ptr<log_entry> *entry) const {
+    std::cout << "Entering function: read_log_entry" << std::endl;
     return read_log_entry_string(std::to_string(key), entry);
 }
 
@@ -75,12 +83,12 @@ nl_log_store::nl_log_store(int srv_id)
     : start_idx_(1)
     , raft_server_bwd_pointer_(nullptr)
 {
+    std::cout << "Entering function: nl_log_store constructor" << std::endl;
     rocksdb::Options options;
     options.create_if_missing = true;
     rocksdb::Status status =
         rocksdb::DB::Open(options, "./logs" + std::to_string(srv_id), &rocksdb_log_);
     assert(status.ok());
-
 
     // get all keys and print them out while we're at it
     rocksdb::Iterator* it = rocksdb_log_->NewIterator(rocksdb::ReadOptions());
@@ -102,16 +110,23 @@ nl_log_store::nl_log_store(int srv_id)
     
 
     ptr<buffer> buf = buffer::alloc(sz_ulong);
+    buf->put(0UL);
     // make a dummy entry
     ptr<log_entry> dummy =  cs_new<log_entry>(0, buf);
     write_log_entry_string("0", dummy);
+    
+    std::cout << "Completed constructor" << std::endl;
 }
 
 nl_log_store::~nl_log_store() {
+    std::cout << "Entering function: nl_log_store destructor" << std::endl;
+    // rocksdb_log_->Flush(rocksdb::FlushOptions());
+    // rocksdb_log_->SyncWAL();
     delete rocksdb_log_;
 }
 
 ptr<log_entry> nl_log_store::make_clone(const ptr<log_entry>& entry) {
+    std::cout << "Entering function: make_clone" << std::endl;
     // NOTE:
     //   Timestamp is used only when `replicate_log_timestamp_` option is on.
     //   Otherwise, log store does not need to store or load it.
@@ -123,20 +138,24 @@ ptr<log_entry> nl_log_store::make_clone(const ptr<log_entry>& entry) {
                              entry->has_crc32(),
                              entry->get_crc32(),
                              false );
+    std::cout << "Leaving function: make_clone" << std::endl;
     return clone;
 }
 
 ulong nl_log_store::next_slot() const {
+    std::cout << "Entering function: next_slot" << std::endl;
     std::lock_guard<std::mutex> l(log_lock_);
     // Exclude the dummy entry.
     return start_idx_ + rocksdb_keys_.size() - 1;
 }
 
 ulong nl_log_store::start_index() const {
+    std::cout << "Entering function: start_index" << std::endl;
     return start_idx_;
 }
 
 ptr<log_entry> nl_log_store::last_entry() const {
+    std::cout << "Entering function: last_entry" << std::endl;
     ptr<log_entry> entry;
     ulong next_idx = next_slot();
     std::lock_guard<std::mutex> l(log_lock_);
@@ -147,16 +166,17 @@ ptr<log_entry> nl_log_store::last_entry() const {
 }
 
 ulong nl_log_store::append(ptr<log_entry>& entry) {
+    std::cout << "Entering function: append" << std::endl;
     ptr<log_entry> clone = make_clone(entry);
 
     std::lock_guard<std::mutex> l(log_lock_);
     size_t idx = start_idx_ + rocksdb_keys_.size() - 1;
     write_log_entry(idx, clone);
-
     return idx;
 }
 
 void nl_log_store::write_at(ulong index, ptr<log_entry>& entry) {
+    std::cout << "Entering function: write_at" << std::endl;
     ptr<log_entry> clone = make_clone(entry);
 
     // Discard all logs equal to or greater than `index.
@@ -173,6 +193,7 @@ void nl_log_store::write_at(ulong index, ptr<log_entry>& entry) {
 ptr< std::vector< ptr<log_entry> > >
     nl_log_store::log_entries(ulong start, ulong end)
 {
+    std::cout << "Entering function: log_entries" << std::endl;
     ptr< std::vector< ptr<log_entry> > > ret =
         cs_new< std::vector< ptr<log_entry> > >();
 
@@ -196,6 +217,7 @@ ptr<std::vector<ptr<log_entry>>>
                                      ulong end,
                                      int64 batch_size_hint_in_bytes)
 {
+    std::cout << "Entering function: log_entries_ext" << std::endl;
     ptr< std::vector< ptr<log_entry> > > ret =
         cs_new< std::vector< ptr<log_entry> > >();
 
@@ -221,6 +243,7 @@ ptr<std::vector<ptr<log_entry>>>
 }
 
 ptr<log_entry> nl_log_store::entry_at(ulong index) {
+    std::cout << "Entering function: entry_at" << std::endl;
     ptr<log_entry> src = nullptr;
     {   std::lock_guard<std::mutex> l(log_lock_);
         read_log_entry(index, &src);
@@ -229,6 +252,7 @@ ptr<log_entry> nl_log_store::entry_at(ulong index) {
 }
 
 ulong nl_log_store::term_at(ulong index) {
+    std::cout << "Entering function: term_at" << std::endl;
     ulong term = 0;
     ptr<log_entry> src = nullptr;
     {   std::lock_guard<std::mutex> l(log_lock_);
@@ -239,6 +263,7 @@ ulong nl_log_store::term_at(ulong index) {
 }
 
 ptr<buffer> nl_log_store::pack(ulong index, int32 cnt) {
+    std::cout << "Entering function: pack" << std::endl;
     std::vector< ptr<buffer> > logs;
 
     size_t size_total = 0;
@@ -271,6 +296,7 @@ ptr<buffer> nl_log_store::pack(ulong index, int32 cnt) {
 }
 
 void nl_log_store::apply_pack(ulong index, buffer& pack) {
+    std::cout << "Entering function: apply_pack" << std::endl;
     pack.pos(0);
     int32 num_logs = pack.get_int();
 
@@ -298,6 +324,7 @@ void nl_log_store::apply_pack(ulong index, buffer& pack) {
 }
 
 bool nl_log_store::compact(ulong last_log_index) {
+    std::cout << "Entering function: compact" << std::endl;
     std::lock_guard<std::mutex> l(log_lock_);
     for (ulong ii = start_idx_; ii <= last_log_index; ++ii) {
         auto entry = rocksdb_keys_.find(ii);
@@ -318,13 +345,18 @@ bool nl_log_store::compact(ulong last_log_index) {
 }
 
 bool nl_log_store::flush() {
+    std::cout << "Entering function: flush" << std::endl;
+    rocksdb_log_->FlushWAL(true);
     return true;
 }
 
-void nl_log_store::close() {}
+void nl_log_store::close() {
+    std::cout << "Entering function: close" << std::endl;
+}
 
 
 ulong nl_log_store::last_durable_index() {
+    std::cout << "Entering function: last_durable_index" << std::endl;
     uint64_t last_log = next_slot() - 1;
 
     return last_log;
