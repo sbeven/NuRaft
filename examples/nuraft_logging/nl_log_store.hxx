@@ -75,7 +75,7 @@ public:
     rocksdb::Status read_log_entry_string(std::string key, ptr<log_entry> *entry) const;
     void write_log_entry(ulong key, ptr<log_entry> entry);
     rocksdb::Status read_log_entry(ulong key, ptr<log_entry> *entry) const;
-
+    void update_start_idx();
 
 private:
     static ptr<log_entry> make_clone(const ptr<log_entry>& entry);

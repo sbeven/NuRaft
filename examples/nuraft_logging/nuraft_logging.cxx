@@ -152,6 +152,7 @@ bool do_cmd(const std::vector<std::string>& tokens) {
     const std::string& cmd = tokens[0];
 
     if (cmd == "q" || cmd == "exit") {
+        stuff.reset();
         stuff.launcher_.shutdown(5);
         return false;
 

@@ -44,7 +44,9 @@ void printStringAsHex(const std::string& str) {
 void nl_log_store::write_log_entry_string(std::string key, ptr<log_entry> entry) {
     ptr<buffer> s_entry = entry->serialize();
     std::string str(reinterpret_cast<char*>(s_entry->data_begin()), s_entry->size());
-    rocksdb::Status status = rocksdb_log_->Put(rocksdb::WriteOptions(), key, str);
+    rocksdb::WriteOptions write_options;
+    write_options.sync = true;
+    rocksdb::Status status = rocksdb_log_->Put(write_options, key, str);
     assert(status.ok());
     rocksdb_keys_.insert(std::stoull(key));
 }
@@ -58,13 +60,20 @@ rocksdb::Status nl_log_store::read_log_entry_string(std::string key, ptr<log_ent
     // value will contain log entry, serialized
     rocksdb::Status status = 
     rocksdb_log_->Get(rocksdb::ReadOptions(), key, &value);
-    if (status.IsNotFound()) {
+      if (!status.ok()) {
         rocksdb_log_->Get(rocksdb::ReadOptions(), "0", &value);
     }
     ptr<buffer> buf = buffer::alloc(value.size());
     std::memcpy(buf->data_begin(), value.data(), value.size());
     *entry = log_entry::deserialize(*buf);
     return status;
+}
+
+void nl_log_store::update_start_idx() {
+    rocksdb::WriteOptions write_options;
+    write_options.sync = true;
+    rocksdb::Status status = rocksdb_log_->Put(write_options, "start_idx_", std::to_string(start_idx_));
+    assert(status.ok());
 }
 
 rocksdb::Status nl_log_store::read_log_entry(ulong key, ptr<log_entry> *entry) const {
@@ -85,23 +94,34 @@ nl_log_store::nl_log_store(int srv_id)
     // get all keys and print them out while we're at it
     rocksdb::Iterator* it = rocksdb_log_->NewIterator(rocksdb::ReadOptions());
     for (it->SeekToFirst(); it->Valid(); it->Next()) {
-    std::string value = it->value().ToString();
-    std::string key = it->key().ToString();
-    std::cout << "key: " << key << std::endl;
-    rocksdb_keys_.insert(std::stoull(key));
-    printStringAsHex(value);
+        std::string value = it->value().ToString();
+        std::string key = it->key().ToString();
+        std::cout << "key: " << key << std::endl;
+        if (key == "start_idx_") {
+            std::cout << "Start index value: " << value << std::endl;
+        } else {
+            rocksdb_keys_.insert(std::stoull(key));
+            printStringAsHex(value);
 
-    ptr<log_entry> log;
-    read_log_entry_string(key, &log);
-    std::cout << "Log entry:" << log->get_term() << " size: " << log->get_buf().size() << std::endl;
-   
+            ptr<log_entry> log;
+            read_log_entry_string(key, &log);
+            std::cout << "Log entry:" << log->get_term() << " size: " << log->get_buf().size() << std::endl;
+        }
     }
     delete it;
 
     std::cout << "Exact number of keys: " << rocksdb_keys_.size() << std::endl;
-    
+
+    std::string value;
+    status = rocksdb_log_->Get(rocksdb::ReadOptions(), "start_idx_", &value);
+    if (status.ok()) {
+        start_idx_ = std::stoull(value);
+    } else if (status.IsNotFound()) {
+        update_start_idx();
+    }
 
     ptr<buffer> buf = buffer::alloc(sz_ulong);
+    buf->put(0UL);
     // make a dummy entry
     ptr<log_entry> dummy =  cs_new<log_entry>(0, buf);
     write_log_entry_string("0", dummy);
@@ -294,6 +314,7 @@ void nl_log_store::apply_pack(ulong index, buffer& pack) {
         } else {
             start_idx_ = 1;
         }
+        update_start_idx();
     }
 }
 
@@ -313,6 +334,7 @@ bool nl_log_store::compact(ulong last_log_index) {
     //   we should set `start_idx_` to new index.
     if (start_idx_ <= last_log_index) {
         start_idx_ = last_log_index + 1;
+        update_start_idx();
     }
     return true;
 }
