@@ -90,11 +90,6 @@ private:
      */
     std::atomic<ulong> start_idx_;
 
-    /**
-     * Backward pointer to Raft server.
-     */
-    raft_server* raft_server_bwd_pointer_;
-
     std::fstream log;
     
    /**
@@ -103,6 +98,4 @@ private:
     rocksdb::DB* rocksdb_log_;
     std::set<ulong> rocksdb_keys_;
 };
-
 }
-

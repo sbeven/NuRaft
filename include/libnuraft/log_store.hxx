@@ -208,6 +208,8 @@ public:
      * @return The last durable log index.
      */
     virtual ulong last_durable_index() { return next_slot() - 1; }
+
+    virtual void close() {}
 };
 
 }

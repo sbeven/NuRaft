@@ -24,6 +24,7 @@ limitations under the License.
 #include <fstream>
 #include <climits>
 #include <cassert>
+#include "rocksdb/convenience.h"
 #include "rocksdb/db.h"
 #include <iomanip>
 #include <cstdint>
@@ -82,7 +83,6 @@ rocksdb::Status nl_log_store::read_log_entry(ulong key, ptr<log_entry> *entry) c
 
 nl_log_store::nl_log_store(int srv_id)
     : start_idx_(1)
-    , raft_server_bwd_pointer_(nullptr)
 {
     rocksdb::Options options;
     options.create_if_missing = true;
@@ -121,14 +121,15 @@ nl_log_store::nl_log_store(int srv_id)
     }
 
     ptr<buffer> buf = buffer::alloc(sz_ulong);
-    buf->put(0UL);
+    ulong zeroValue = 0;
+    buf->put(zeroValue);
     // make a dummy entry
     ptr<log_entry> dummy =  cs_new<log_entry>(0, buf);
     write_log_entry_string("0", dummy);
 }
 
 nl_log_store::~nl_log_store() {
-    delete rocksdb_log_;
+    assert(rocksdb_log_ == nullptr);
 }
 
 ptr<log_entry> nl_log_store::make_clone(const ptr<log_entry>& entry) {
@@ -343,8 +344,16 @@ bool nl_log_store::flush() {
     return true;
 }
 
-void nl_log_store::close() {}
-
+void nl_log_store::close() {
+    if (rocksdb_log_) {
+        rocksdb::Status s = rocksdb_log_->Close();
+        if (!s.ok()) {
+            std::cerr << "Error closing rocksdb log store: " << s.ToString() << std::endl;
+        }
+        delete rocksdb_log_;
+        rocksdb_log_ = nullptr;
+    }
+}
 
 ulong nl_log_store::last_durable_index() {
     uint64_t last_log = next_slot() - 1;

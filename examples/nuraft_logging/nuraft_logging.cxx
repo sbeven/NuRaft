@@ -152,6 +152,9 @@ bool do_cmd(const std::vector<std::string>& tokens) {
     const std::string& cmd = tokens[0];
 
     if (cmd == "q" || cmd == "exit") {
+        // Shutdown log_store and rocksdb instance before calling stuff.reset(). 
+        auto ls = stuff.smgr_->load_log_store();
+        ls->close();
         stuff.reset();
         stuff.launcher_.shutdown(5);
         return false;
