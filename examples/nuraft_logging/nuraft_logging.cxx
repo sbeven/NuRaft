@@ -38,6 +38,7 @@ static const raft_params::return_method_type CALL_TYPE
 }
 //specify namespaces for intellisense
 #include "nl_common.hxx"
+#include "nl_log.hxx"
 
 namespace nuraft_logging{
 void handle_result(ptr<TestSuite::Timer> timer,
@@ -61,21 +62,16 @@ void handle_result(ptr<TestSuite::Timer> timer,
 void append_log(const std::string& cmd,
                 const std::vector<std::string>& tokens)
 {
-    if (tokens.size() < 2) {
-        std::cout << "too few arguments" << std::endl;
+    if (tokens.size() != 3) {
+        std::cout << "not the right number of arguments" << std::endl;
         return;
     }
-
-    std::string cascaded_str;
-    for (size_t ii=1; ii<tokens.size(); ++ii) {
-        cascaded_str += tokens[ii] + " ";
-    }
+    std::string key = tokens[1];
+    std::string value = tokens[2];
 
     // Create a new log which will contain
     // 4-byte length and string data.
-    ptr<buffer> new_log = buffer::alloc(sizeof(int) + cascaded_str.size());
-    buffer_serializer bs(new_log);
-    bs.put_str(cascaded_str);
+    ptr<buffer> new_log = nl_log(nl_log::PUT, key, value).serialize();
 
     // To measure the elapsed time.
     ptr<TestSuite::Timer> timer = cs_new<TestSuite::Timer>();
@@ -155,12 +151,11 @@ bool do_cmd(const std::vector<std::string>& tokens) {
         // Shutdown log_store and rocksdb instance before calling stuff.reset(). 
         auto ls = stuff.smgr_->load_log_store();
         ls->close();
-        stuff.reset();
         stuff.launcher_.shutdown(5);
         return false;
 
-    } else if ( cmd == "msg" ) {
-        // e.g.) msg hello world
+    } else if ( cmd == "put" ) {
+        // e.g.) put key value
         append_log(cmd, tokens);
 
     } else if ( cmd == "add" ) {

@@ -24,6 +24,8 @@ limitations under the License.
 #include <iostream>
 #include <mutex>
 
+#include "nl_log.hxx"
+
 using namespace nuraft;
 
 class nl_state_machine : public state_machine {
@@ -35,30 +37,26 @@ public:
     ~nl_state_machine() {}
 
     ptr<buffer> pre_commit(const ulong log_idx, buffer& data) {
-        // Extract string from `data.
-        buffer_serializer bs(data);
-        std::string str = bs.get_str();
+        nl_log log_entry = nl_log::deserialize(data);
 
         // Just print.
         std::cout << "pre_commit " << log_idx << ": "
-                  << str << std::endl;
+                  << log_entry.to_string() << std::endl;
         return nullptr;
     }
 
     ptr<buffer> commit(const ulong log_idx, buffer& data) {
-        // Extract string from `data.
-        buffer_serializer bs(data);
-        std::string str = bs.get_str();
+        nl_log log_entry = nl_log::deserialize(data);
 
         // Just print.
         std::cout << "commit " << log_idx << ": "
-                  << str << std::endl;
+                  << log_entry.to_string() << std::endl;
 
         // Update last committed index number.
         last_committed_idx_ = log_idx;
         return nullptr;
     }
-
+    // optional
     void commit_config(const ulong log_idx, ptr<cluster_config>& new_conf) {
         // Nothing to do with configuration change. Just update committed index.
         last_committed_idx_ = log_idx;
