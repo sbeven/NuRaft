@@ -23,6 +23,8 @@ limitations under the License.
 #include <cassert>
 #include <iostream>
 #include <mutex>
+#include <unordered_map>
+#include <string>
 
 #include "nl_log.hxx"
 
@@ -52,10 +54,20 @@ public:
         std::cout << "commit " << log_idx << ": "
                   << log_entry.to_string() << std::endl;
 
+        // Apply to local in-memory KV store.
+        {   std::lock_guard<std::mutex> ll(kv_store_lock_);
+            if (log_entry.op == nl_log::PUT) {
+                kv_store_[log_entry.key] = log_entry.value;
+            } else if (log_entry.op == nl_log::DEL) {
+                kv_store_.erase(log_entry.key);
+            }
+        }
+
         // Update last committed index number.
         last_committed_idx_ = log_idx;
         return nullptr;
     }
+    
     // optional
     void commit_config(const ulong log_idx, ptr<cluster_config>& new_conf) {
         // Nothing to do with configuration change. Just update committed index.
@@ -67,7 +79,7 @@ public:
         buffer_serializer bs(data);
         std::string str = bs.get_str();
 
-        // Just print.
+        // we do nothing for precommit so we do nothing for rollback
         std::cout << "rollback " << log_idx << ": "
                   << str << std::endl;
     }
@@ -138,9 +150,22 @@ public:
         when_done(ret, except);
     }
 
+    // Print the in-memory key/value store for debugging.
+    void print_kv_store() {
+        std::lock_guard<std::mutex> ll(kv_store_lock_);
+        std::cout << "KV store contents (" << kv_store_.size() << " entries):\n";
+        for (const auto &p : kv_store_) {
+            std::cout << "  \"" << p.first << "\" => \"" << p.second << "\"\n";
+        }
+    }
+
 private:
     // Last committed Raft log number.
     std::atomic<uint64_t> last_committed_idx_;
+
+    // In-memory key/value store for PUT/DEL operations.
+    std::map<std::string, std::string> kv_store_;
+    std::mutex kv_store_lock_;
 
     // Last snapshot.
     ptr<snapshot> last_snapshot_;

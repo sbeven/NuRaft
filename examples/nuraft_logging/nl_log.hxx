@@ -21,7 +21,7 @@ struct nl_log {
 
 	op_type op{};
 	std::string key;
-	std::string value; // empty for GET/DEL
+	std::string value; // empty for DEL
 
 	nl_log() = default;
 	nl_log(op_type o, std::string k, std::string v = {})

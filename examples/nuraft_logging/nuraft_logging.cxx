@@ -61,17 +61,32 @@ void handle_result(ptr<TestSuite::Timer> timer,
 
 void append_log(const std::string& cmd,
                 const std::vector<std::string>& tokens)
-{
-    if (tokens.size() != 3) {
-        std::cout << "not the right number of arguments" << std::endl;
-        return;
-    }
-    std::string key = tokens[1];
-    std::string value = tokens[2];
+{   
+    ptr<buffer> new_log;
+    if (cmd == "put") {
 
-    // Create a new log which will contain
-    // 4-byte length and string data.
-    ptr<buffer> new_log = nl_log(nl_log::PUT, key, value).serialize();
+        if (tokens.size() != 3) {
+            std::cout << "not the right number of arguments" << std::endl;
+            return;
+        }
+        std::string key = tokens[1];
+        std::string value = tokens[2];
+
+        // Create a new log which will contain
+        // 4-byte length and string data.
+        new_log = nl_log(nl_log::PUT, key, value).serialize();
+    } else if (cmd == "del") {
+
+        if (tokens.size() != 2) {
+            std::cout << "not the right number of arguments" << std::endl;
+            return;
+        }
+        std::string key = tokens[1];
+
+        // Create a new log which will contain
+        // 4-byte length and string data.
+        new_log = nl_log(nl_log::DEL, key, "").serialize();
+    }
 
     // To measure the elapsed time.
     ptr<TestSuite::Timer> timer = cs_new<TestSuite::Timer>();
@@ -155,9 +170,14 @@ bool do_cmd(const std::vector<std::string>& tokens) {
         return false;
 
     } else if ( cmd == "put" ) {
-        // e.g.) put key value
+        // e.g. put key value
         append_log(cmd, tokens);
-
+    } else if ( cmd == "del" ) {
+        // e.g. delete key
+        append_log(cmd, tokens);
+    } else if ( cmd == "get" ) {
+        stuff.sm_.get();
+        std::cout << "Adding server..." << std::endl;
     } else if ( cmd == "add" ) {
         // e.g.) add 2 localhost:12345
         add_server(cmd, tokens);
