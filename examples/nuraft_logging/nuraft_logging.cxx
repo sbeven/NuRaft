@@ -41,6 +41,11 @@ static const raft_params::return_method_type CALL_TYPE
 #include "nl_log.hxx"
 
 namespace nuraft_logging{
+
+nl_state_machine* get_sm() {
+    return static_cast<nl_state_machine*>( stuff.sm_.get() );
+}
+
 void handle_result(ptr<TestSuite::Timer> timer,
                    raft_result& result,
                    ptr<std::exception>& err)
@@ -139,6 +144,7 @@ void print_status(const std::string& cmd,
             << " - " << (ls->next_slot() - 1) << std::endl
         << "last committed index: "
             << stuff.raft_instance_->get_committed_log_idx() << std::endl;
+        get_sm()->print_kv_store();
 }
 
 void help(const std::string& cmd,
@@ -176,8 +182,17 @@ bool do_cmd(const std::vector<std::string>& tokens) {
         // e.g. delete key
         append_log(cmd, tokens);
     } else if ( cmd == "get" ) {
-        stuff.sm_.get();
-        std::cout << "Adding server..." << std::endl;
+        if (tokens.size() != 2) {
+            std::cout << "not the right number of arguments" << std::endl;
+            return false;
+        }
+        std::string key = tokens[1];
+        std::string value = get_sm()->get_value(key);
+        if (value.empty()) {
+            std::cout << "Key '" << key << "' not found" << std::endl;
+        } else {
+            std::cout << "Value for key '" << key << "': " << value << std::endl;
+        }
     } else if ( cmd == "add" ) {
         // e.g.) add 2 localhost:12345
         add_server(cmd, tokens);

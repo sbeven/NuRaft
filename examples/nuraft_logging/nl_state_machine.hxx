@@ -159,6 +159,17 @@ public:
         }
     }
 
+    std::string get_value(std::string key) {
+        std::lock_guard<std::mutex> ll(kv_store_lock_);
+        try {
+            std::string val = kv_store_.at(key);
+            return val;
+        } catch (const std::out_of_range& e) {
+            return std::string();
+        }
+
+    }
+
 private:
     // Last committed Raft log number.
     std::atomic<uint64_t> last_committed_idx_;
