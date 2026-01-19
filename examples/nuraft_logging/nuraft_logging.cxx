@@ -205,6 +205,26 @@ bool do_cmd(const std::vector<std::string>& tokens) {
 
     } else if ( cmd == "h" || cmd == "help" ) {
         help(cmd, tokens);
+    } else if (cmd == "flip") {
+        if (tokens.size() != 2) {
+            std::cout << "not the right number of arguments" << std::endl;
+            return false;
+        }
+        int server_id = atoi(tokens[1].c_str());
+        if ( !server_id || server_id == stuff.server_id_ ) {
+            std::cout << "wrong server id: " << server_id << std::endl;
+            return false;
+        }
+        ptr<raft_result> ret = stuff.raft_instance_->flip_learner_flag(server_id, true);
+
+        if (!ret->get_result_code() == 0) {
+            std::cout << "failed to flip to learner: "
+                    << ret->get_result_code() << std::endl;
+            return false;
+        }
+
+        std::cout << "async request is in progress (check with `list` command)"
+            << std::endl;
     }
     return true;
 }

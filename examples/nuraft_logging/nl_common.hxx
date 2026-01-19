@@ -110,6 +110,9 @@ void server_list(const std::string& cmd,
         std::cout
             << "server id " << srv->get_id()
             << ": " << srv->get_endpoint();
+        if (srv->is_learner()) {
+            std::cout << " (LEARNER)";
+        }
         if (srv->get_id() == leader_id) {
             std::cout << " (LEADER)";
         }
