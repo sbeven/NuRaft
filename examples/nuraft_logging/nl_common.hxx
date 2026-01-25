@@ -71,32 +71,6 @@ struct server_stuff {
 static server_stuff stuff;
 
 
-void add_server(const std::string& cmd,
-                const std::vector<std::string>& tokens)
-{
-    if (tokens.size() < 3) {
-        std::cout << "too few arguments" << std::endl;
-        return;
-    }
-
-    int server_id_to_add = atoi(tokens[1].c_str());
-    if ( !server_id_to_add || server_id_to_add == stuff.server_id_ ) {
-        std::cout << "wrong server id: " << server_id_to_add << std::endl;
-        return;
-    }
-
-    std::string endpoint_to_add = tokens[2];
-    srv_config srv_conf_to_add( server_id_to_add, endpoint_to_add );
-    ptr<raft_result> ret = stuff.raft_instance_->add_srv(srv_conf_to_add);
-    if (!ret->get_accepted()) {
-        std::cout << "failed to add server: "
-                  << ret->get_result_code() << std::endl;
-        return;
-    }
-    std::cout << "async request is in progress (check with `list` command)"
-              << std::endl;
-}
-
 void server_list(const std::string& cmd,
                  const std::vector<std::string>& tokens)
 {

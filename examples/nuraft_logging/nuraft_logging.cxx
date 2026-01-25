@@ -64,34 +64,9 @@ void handle_result(ptr<TestSuite::Timer> timer,
               << std::endl;
 }
 
-void append_log(const std::string& cmd,
-                const std::vector<std::string>& tokens)
+// append a log entry to the distributed log
+void append_log(ptr<buffer> new_log)
 {   
-    ptr<buffer> new_log;
-    if (cmd == "put") {
-
-        if (tokens.size() != 3) {
-            std::cout << "not the right number of arguments" << std::endl;
-            return;
-        }
-        std::string key = tokens[1];
-        std::string value = tokens[2];
-
-        // Create a new log which will contain
-        // 4-byte length and string data.
-        new_log = nl_log(nl_log::PUT, key, value).serialize();
-    } else if (cmd == "del") {
-
-        if (tokens.size() != 2) {
-            std::cout << "not the right number of arguments" << std::endl;
-            return;
-        }
-        std::string key = tokens[1];
-
-        // Create a new log which will contain
-        // 4-byte length and string data.
-        new_log = nl_log(nl_log::DEL, key, "").serialize();
-    }
 
     // To measure the elapsed time.
     ptr<TestSuite::Timer> timer = cs_new<TestSuite::Timer>();
@@ -132,6 +107,68 @@ void append_log(const std::string& cmd,
     }
 }
 
+// API FUNCTIONS
+// these functions are the intended entry point for any api to the state machine.
+// the CLI operations will also call these functions.
+void put(const std::string& key,
+                   const std::string& value)
+{
+    ptr<buffer> new_log = nl_log(nl_log::PUT, key, value).serialize();
+    append_log(new_log);
+}
+
+void del(const std::string& key)
+{
+    ptr<buffer> new_log = nl_log(nl_log::DEL, key, "").serialize();
+    append_log(new_log);
+}
+
+std::string get(const std::string& key)
+{
+    return get_sm()->get_value(key);
+}
+
+// add a node to the cluster
+void add_node(int64 server_id,
+         std::string server_addr)
+{   
+    // we make the server id nonzero since atoi parsing errors return 0 (for cli)
+    if ( !server_id || server_id == stuff.server_id_ ) {
+        std::cout << "wrong server id: " << server_id << std::endl;
+        return;
+    }
+    srv_config srv_conf_to_add( server_id, server_addr );
+    ptr<raft_result> ret = stuff.raft_instance_->add_srv(srv_conf_to_add);
+
+    if (!ret->get_accepted()) {
+        std::cout << "failed to add server: "
+                  << ret->get_result_code() << std::endl;
+        return;
+    }
+    std::cout << "async request is in progress (check with `list` command)"
+              << std::endl;
+}
+
+// flips a node in the cluster to learner mode
+void flip_to_learner(int64 server_id)
+{
+    if ( !server_id || server_id == stuff.server_id_ ) {
+        std::cout << "wrong server id: " << server_id << std::endl;
+        return;
+    }
+    ptr<raft_result> ret = stuff.raft_instance_->flip_learner_flag(server_id, true);
+
+    if (!ret->get_result_code() == 0) {
+        std::cout << "failed to flip to learner: "
+                << ret->get_result_code() << std::endl;
+        return;
+    }
+
+    std::cout << "async request is in progress (check with `list` command)"
+        << std::endl;
+}
+// END OF API FUNCTIONS
+
 void print_status(const std::string& cmd,
                   const std::vector<std::string>& tokens)
 {
@@ -147,6 +184,7 @@ void print_status(const std::string& cmd,
         get_sm()->print_kv_store();
 }
 
+// TODO: this is outdated, may or may not update
 void help(const std::string& cmd,
           const std::vector<std::string>& tokens)
 {
@@ -176,27 +214,46 @@ bool do_cmd(const std::vector<std::string>& tokens) {
         return false;
 
     } else if ( cmd == "put" ) {
-        // e.g. put key value
-        append_log(cmd, tokens);
-    } else if ( cmd == "del" ) {
-        // e.g. delete key
-        append_log(cmd, tokens);
-    } else if ( cmd == "get" ) {
-        if (tokens.size() != 2) {
+        // e.g. put k v
+        if (tokens.size() != 3) {
             std::cout << "not the right number of arguments" << std::endl;
-            return false;
+            // return true so as to not exit the main loop for CLI
+            return true;
         }
         std::string key = tokens[1];
-        std::string value = get_sm()->get_value(key);
+        std::string value = tokens[2];
+        put(key, value);
+    } else if ( cmd == "del" ) {
+        // e.g. delete k
+         if (tokens.size() != 2) {
+            std::cout << "not the right number of arguments" << std::endl;
+            return true;
+        }
+        std::string key = tokens[1];
+        del(key);
+    } else if ( cmd == "get" ) {
+        // e.g. get k
+        if (tokens.size() != 2) {
+            std::cout << "not the right number of arguments" << std::endl;
+            return true;
+        }
+        std::string key = tokens[1];
+        std::string value = get(key);
+
         if (value.empty()) {
             std::cout << "Key '" << key << "' not found" << std::endl;
         } else {
             std::cout << "Value for key '" << key << "': " << value << std::endl;
         }
     } else if ( cmd == "add" ) {
-        // e.g.) add 2 localhost:12345
-        add_server(cmd, tokens);
-
+        // e.g. add 2 localhost:12345
+        if (tokens.size() < 3) {
+            std::cout << "too few arguments" << std::endl;
+            return true;
+        }
+        int server_id_to_add = atoi(tokens[1].c_str());
+        std::string endpoint_to_add = tokens[2];
+        add_node(server_id_to_add, endpoint_to_add);
     } else if ( cmd == "st" || cmd == "stat" ) {
         print_status(cmd, tokens);
 
@@ -208,23 +265,10 @@ bool do_cmd(const std::vector<std::string>& tokens) {
     } else if (cmd == "flip") {
         if (tokens.size() != 2) {
             std::cout << "not the right number of arguments" << std::endl;
-            return false;
+            return true;
         }
         int server_id = atoi(tokens[1].c_str());
-        if ( !server_id || server_id == stuff.server_id_ ) {
-            std::cout << "wrong server id: " << server_id << std::endl;
-            return false;
-        }
-        ptr<raft_result> ret = stuff.raft_instance_->flip_learner_flag(server_id, true);
-
-        if (!ret->get_result_code() == 0) {
-            std::cout << "failed to flip to learner: "
-                    << ret->get_result_code() << std::endl;
-            return false;
-        }
-
-        std::cout << "async request is in progress (check with `list` command)"
-            << std::endl;
+        flip_to_learner(server_id);
     }
     return true;
 }
