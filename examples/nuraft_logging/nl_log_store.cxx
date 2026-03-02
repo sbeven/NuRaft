@@ -105,7 +105,7 @@ nl_log_store::nl_log_store(int srv_id)
 
             ptr<log_entry> log;
             read_log_entry_string(key, &log);
-            std::cout << "Log entry:" << log->get_term() << " size: " << log->get_buf().size() << std::endl;
+            std::cout << " size: " << log->get_buf().size() << std::endl;
         }
     }
     delete it;
