@@ -6,10 +6,11 @@
 
 example commands:
 add 2 localhost:10002
-put 1 2
-put a b
-get 1
+list
+put a b 1
+put a c 2
 st
+get a
+csn
 del a
 st
-list

@@ -32,14 +32,20 @@ limitations under the License.
 namespace nuraft {
 
 void printStringAsHex(const std::string& str) {
+    // save the old state of std::cout before we modify it with options
+    std::ios old_state(nullptr);
+    old_state.copyfmt(std::cout);
+
     for (char c : str) {
         // Cast char to int to ensure correct hexadecimal representation
         // Use std::hex to print in hexadecimal
         // Use std::setw(2) and std::setfill('0') for two-digit, zero-padded hex
-        std::cout << std::hex << std::setw(2) << std::setfill('0') 
+        std::cout << std::hex << std::setw(2) << std::setfill('0')
                   << static_cast<int>(static_cast<unsigned char>(c)) << " ";
     }
     std::cout << std::endl;
+
+    std::cout.copyfmt(old_state);
 }
 
 void nl_log_store::write_log_entry_string(std::string key, ptr<log_entry> entry) {

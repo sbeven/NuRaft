@@ -111,21 +111,28 @@ void append_log(ptr<buffer> new_log)
 // these functions are the intended entry point for any api to the state machine.
 // the CLI operations will also call these functions.
 void put(const std::string& key,
-                   const std::string& value)
+                   const std::string& value,
+                   uint64_t csn)
 {
-    ptr<buffer> new_log = nl_log(nl_log::PUT, key, value).serialize();
+    ptr<buffer> new_log = nl_log(nl_log::PUT, key, value, csn).serialize();
     append_log(new_log);
 }
 
 void del(const std::string& key)
 {
-    ptr<buffer> new_log = nl_log(nl_log::DEL, key, "").serialize();
+    ptr<buffer> new_log = nl_log(nl_log::DEL, key).serialize();
     append_log(new_log);
 }
 
-std::string get(const std::string& key)
+// Note: returns {std::string(), 0} if key not found
+std::pair<std::string, uint64_t> get(const std::string& key)
 {
     return get_sm()->get_value(key);
+}
+
+uint64_t get_latest_csn()
+{
+    return get_sm()->get_latest_csn();
 }
 
 // add a node to the cluster
@@ -192,6 +199,15 @@ void help(const std::string& cmd,
     << "echo message: msg <operand>\n"
     << "    e.g.) msg hello world!\n"
     << "\n"
+    << "put a key/value: put <key> <value> <csn>\n"
+    << "    e.g.) put mykey myvalue 42\n"
+    << "\n"
+    << "get a key: get <key>\n"
+    << "    e.g.) get mykey\n"
+    << "\n"
+    << "get latest CSN: csn\n"
+    << "    e.g.) csn\n"
+    << "\n"
     << "add server: add <server id> <address>:<port>\n"
     << "    e.g.) add 2 127.0.0.1:20000\n"
     << "\n"
@@ -214,15 +230,22 @@ bool do_cmd(const std::vector<std::string>& tokens) {
         return false;
 
     } else if ( cmd == "put" ) {
-        // e.g. put k v
-        if (tokens.size() != 3) {
+        // e.g. put k v csn
+        if (tokens.size() != 4) {
             std::cout << "not the right number of arguments" << std::endl;
             // return true so as to not exit the main loop for CLI
             return true;
         }
         std::string key = tokens[1];
         std::string value = tokens[2];
-        put(key, value);
+        uint64_t csn = 0;
+        try {
+            csn = std::stoull(tokens[3]);
+        } catch (...) {
+            std::cout << "invalid csn value" << std::endl;
+            return true;
+        }
+        put(key, value, csn);
     } else if ( cmd == "del" ) {
         // e.g. delete k
          if (tokens.size() != 2) {
@@ -238,13 +261,23 @@ bool do_cmd(const std::vector<std::string>& tokens) {
             return true;
         }
         std::string key = tokens[1];
-        std::string value = get(key);
+        auto result = get(key);
+        const std::string &value = result.first;
+        uint64_t csn = result.second;
 
         if (value.empty()) {
             std::cout << "Key '" << key << "' not found" << std::endl;
         } else {
-            std::cout << "Value for key '" << key << "': " << value << std::endl;
+            std::cout << "Value for key '" << key << "': " << value
+                      << " (csn=" << csn << ")" << std::endl;
         }
+    } else if ( cmd == "csn" ) {
+        if (tokens.size() != 1) {
+            std::cout << "csn takes no arguments" << std::endl;
+            return true;
+        }
+        uint64_t latest = get_latest_csn();
+        std::cout << "Latest CSN: " << latest << std::endl;
     } else if ( cmd == "add" ) {
         // e.g. add 2 localhost:12345
         if (tokens.size() < 3) {

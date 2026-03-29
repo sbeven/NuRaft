@@ -21,6 +21,7 @@ limitations under the License.
 
 #include <atomic>
 #include <cassert>
+#include <deque>
 #include <iostream>
 #include <mutex>
 #include <unordered_map>
@@ -54,10 +55,18 @@ public:
         std::cout << "commit " << log_idx << ": "
                   << log_entry.to_string() << std::endl;
 
+        // Update latest CSN separately from KV store modification.
+        // Since DEL operations have CSN 0 they shouldn't affect latest CSN
+        {
+            std::lock_guard<std::mutex> ll(latest_csn_lock_);
+            latest_csn_ = std::max(latest_csn_, log_entry.csn);
+        }
+
         // Apply to local in-memory KV store.
         {   std::lock_guard<std::mutex> ll(kv_store_lock_);
             if (log_entry.op == nl_log::PUT) {
-                kv_store_[log_entry.key] = log_entry.value;
+                kv_store_[log_entry.key].emplace_back(log_entry.value,
+                                                    log_entry.csn);
             } else if (log_entry.op == nl_log::DEL) {
                 kv_store_.erase(log_entry.key);
             }
@@ -135,6 +144,11 @@ public:
         return last_committed_idx_;
     }
 
+    uint64_t get_latest_csn() {
+        std::lock_guard<std::mutex> ll(latest_csn_lock_);
+        return latest_csn_;
+    }
+
     void create_snapshot(snapshot& s,
                          async_result<bool>::handler_type& when_done)
     {
@@ -155,27 +169,38 @@ public:
         std::lock_guard<std::mutex> ll(kv_store_lock_);
         std::cout << "KV store contents (" << kv_store_.size() << " entries):\n";
         for (const auto &p : kv_store_) {
-            std::cout << "  \"" << p.first << "\" => \"" << p.second << "\"\n";
+            if (p.second.empty()) continue;
+            std::cout << "  \"" << p.first << "\":\n";
+            for (size_t i = 0; i < p.second.size(); ++i) {
+                const auto &entry = p.second[i];
+                bool latest = (i + 1 == p.second.size());
+                std::cout << "    [" << i << "] value=\"" << entry.first << "\""
+                          << " csn=" << entry.second;
+                if (latest) {
+                    std::cout << "  <-- latest";
+                }
+                std::cout << "\n";
+            }
         }
     }
 
-    std::string get_value(std::string key) {
+    std::pair<std::string, uint64_t> get_value(std::string key) {
         std::lock_guard<std::mutex> ll(kv_store_lock_);
-        try {
-            std::string val = kv_store_.at(key);
-            return val;
-        } catch (const std::out_of_range& e) {
-            return std::string();
+        auto it = kv_store_.find(key);
+        if (it == kv_store_.end() || it->second.empty()) {
+            return {std::string(), 0};
         }
-
+        return it->second.back();
     }
 
 private:
     // Last committed Raft log number.
     std::atomic<uint64_t> last_committed_idx_;
+    uint64_t latest_csn_ = 0;
+    std::mutex latest_csn_lock_;
 
     // In-memory key/value store for PUT/DEL operations.
-    std::map<std::string, std::string> kv_store_;
+    std::map<std::string, std::deque<std::pair<std::string, uint64_t>>> kv_store_;
     std::mutex kv_store_lock_;
 
     // Last snapshot.
