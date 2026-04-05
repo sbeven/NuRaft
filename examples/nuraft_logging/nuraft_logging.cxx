@@ -124,10 +124,10 @@ void del(const std::string& key)
     append_log(new_log);
 }
 
-// Note: returns {std::string(), 0} if key not found
-std::pair<std::string, uint64_t> get(const std::string& key)
+// Note: returns {std::string(), 0} if key not found or no csn <= input_csn
+std::pair<std::string, uint64_t> get(const std::string& key, uint64_t csn)
 {
-    return get_sm()->get_value(key);
+    return get_sm()->get_value(key, csn);
 }
 
 uint64_t get_latest_csn()
@@ -202,8 +202,8 @@ void help(const std::string& cmd,
     << "put a key/value: put <key> <value> <csn>\n"
     << "    e.g.) put mykey myvalue 42\n"
     << "\n"
-    << "get a key: get <key>\n"
-    << "    e.g.) get mykey\n"
+    << "get a key at csn: get <key> <csn>\n"
+    << "    e.g.) get mykey 42\n"
     << "\n"
     << "get latest CSN: csn\n"
     << "    e.g.) csn\n"
@@ -255,20 +255,27 @@ bool do_cmd(const std::vector<std::string>& tokens) {
         std::string key = tokens[1];
         del(key);
     } else if ( cmd == "get" ) {
-        // e.g. get k
-        if (tokens.size() != 2) {
+        // e.g. get k csn
+        if (tokens.size() != 3) {
             std::cout << "not the right number of arguments" << std::endl;
             return true;
         }
         std::string key = tokens[1];
-        auto result = get(key);
+        uint64_t input_csn = 0;
+        try {
+            input_csn = std::stoull(tokens[2]);
+        } catch (...) {
+            std::cout << "invalid csn value" << std::endl;
+            return true;
+        }
+        std::pair<std::string, uint64_t> result = get(key, input_csn);
         const std::string &value = result.first;
         uint64_t csn = result.second;
 
         if (value.empty()) {
-            std::cout << "Key '" << key << "' not found" << std::endl;
+            std::cout << "Key '" << key << "' not found at csn <= " << input_csn << std::endl;
         } else {
-            std::cout << "Value for key '" << key << "': " << value
+            std::cout << "Value for key '" << key << "' at csn <= " << input_csn << ": " << value
                       << " (csn=" << csn << ")" << std::endl;
         }
     } else if ( cmd == "csn" ) {

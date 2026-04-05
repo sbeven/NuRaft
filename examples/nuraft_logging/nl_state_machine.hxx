@@ -184,13 +184,19 @@ public:
         }
     }
 
-    std::pair<std::string, uint64_t> get_value(std::string key) {
+    std::pair<std::string, uint64_t> get_value(std::string key, uint64_t csn) {
         std::lock_guard<std::mutex> ll(kv_store_lock_);
         auto it = kv_store_.find(key);
         if (it == kv_store_.end() || it->second.empty()) {
             return {std::string(), 0};
         }
-        return it->second.back();
+        // Iterate from back to front to find the largest csn <= input csn
+        for (auto rit = it->second.rbegin(); rit != it->second.rend(); ++rit) {
+            if (rit->second <= csn) {
+                return *rit;
+            }
+        }
+        return {std::string(), 0};
     }
 
 private:

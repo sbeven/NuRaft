@@ -10,7 +10,19 @@ list
 put a b 1
 put a c 2
 st
-get a
+get a 1
+get a 2
 csn
 del a
 st
+
+To build correctly as a standalone (not in kepler):
+1. run git submodule update --init --recursive
+2. cd into rocksdb
+3. run `make static_lib`
+4. cd into NuRaft
+5. mkdir build
+6. cmake ..
+7. make -j8
+
+If NuRaft is replaying logs and you eant to reset go to build/logs1, build/logs2, etc. and delete them
